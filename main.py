@@ -15,7 +15,7 @@ TOKEN: Final[str] = os.getenv('DISCORD_TOKEN')
 intents: Intents = Intents.all()
 intents.message_content = True  # NOQA
 #client: Client = Client(intents=intents)
-bot: commands.Bot = commands.Bot(command_prefix="/", intents = intents)
+bot: commands.Bot = commands.Bot(command_prefix="|", intents = intents)
 
 #Step 2: Message Functionality
 async def send_message(message : Message, user_message : str) -> None:
@@ -52,7 +52,11 @@ async def getwaifu(ctx: commands.Context):
         await ctx.send(embed=embed)
     except Exception as e:
         print(e)
-        
+
+@bot.hybrid_command()
+async def lastLeagueMatch(ctx: commands.Context, username: str):
+    data = last_league_match(username)
+
 #Step 3: Handling the startup for the bot
 @bot.event 
 async def on_ready() -> None:
@@ -71,10 +75,10 @@ async def on_ready() -> None:
 async def on_message(message: Message) -> None:
     if message.author == bot.user:
         return
-    if (message.channel.id != 1264845768108544051) and (message.channel.id !=1264743004002848778):
-        return
     if message.content.startswith('/'):
         await bot.process_commands(message)
+        return
+    if (message.channel.id != 1264845768108544051) and (message.channel.id !=1264743004002848778):
         return
     
     # return 
@@ -88,7 +92,6 @@ async def on_message(message: Message) -> None:
 #Step 5: Main Entry Point
 def main() -> None:
     bot.run(token=TOKEN)
-    #bot.run(token=TOKEN)
 
 if __name__ == '__main__':
     main()

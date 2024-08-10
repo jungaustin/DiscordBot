@@ -15,6 +15,7 @@ waifu_url = 'https://api.waifu.im/search'
 
 load_dotenv()
 OPENAI_API_KEY: Final[str] = os.getenv('OPENAI_API_KEY')
+RIOT_API_KEY: Final[str] = os.getenv('RIOT_API_KEY')
 
 llm = ChatOpenAI(temperature=0.2)
 memory = ConversationSummaryBufferMemory(llm = llm, max_token_limit= 50, return_messages=True)
@@ -50,4 +51,19 @@ def get_waifu(param = {}):
     else:
         print("error")
         return
+
+
+def last_league_match(input: str):
+    if '#' in input:
+        username = input[0:input.index('#')]
+        tagline = input[input.index('#')+1:]
+    else:
+        return
+    linkToPUUID  = "https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/" + username + "/" + tagline + "?api_key=" + RIOT_API_KEY
+    response = requests.get(linkToPUUID)
+    player_info = response.json()
+    puuid = player_info['puuid']
+    matchLink = "https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/" + puuid + "/ids?start=0&count=1" + "&api_key=" + RIOT_API_KEY
+    response2 = requests.get(matchLink)
+    match = response2.json()[0]
     
