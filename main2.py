@@ -1,41 +1,78 @@
 from typing import Final
-import discord
-from discord import app_commands
-from discord.ext import commands
-from dotenv import load_dotenv
 import os
 import certifi
-
 os.environ['SSL_CERT_FILE'] = certifi.where()
+from dotenv import load_dotenv
+from discord import Intents, Client, Message, app_commands, Interaction, Embed, File
+from discord.ext import commands
+import json
+import sqlite3
+from blackjack import play_blackjack, combine_images
+from PIL import Image
+from io import BytesIO
+import requests
+import asyncio
 
-# Load token from .env file
+
+#Step 0: Load Out Token from Somewhere Safe
 load_dotenv()
 TOKEN: Final[str] = os.getenv('DISCORD_TOKEN')
 
-intents = discord.Intents.all()
-intents.messages = True
-intents.message_content = True  # Enable the privileged message content intent
 
-bot = commands.Bot(command_prefix="||", intents=intents)
+#Step 1: Bot Setup
+intents: Intents = Intents.all()
+intents.message_content = True  # NOQA
+#client: Client = Client(intents=intents)
+bot: commands.Bot = commands.Bot(command_prefix="|", intents = intents)
+
 
 @bot.hybrid_command()
-async def ping(ctx: commands.Context):
-    await ctx.send("pong")
-
-# @bot.tree.command(name="say")
-# @app_commands.describe(message="what to say")
-# async def say(interaction: discord.Interaction, message: str):
-#     await interaction.response.send_message(f"{interaction.user.mention} said: {message}")
-
-@bot.event
-async def on_ready():
-    print("Bot is ready")
+async def blackjack(ctx: commands.Context):
     try:
-        # Sync commands to a specific guild for faster testing
-        guild = discord.Object(id='720796796762325005')  # replace with your guild id
-        #await bot.tree.sync(guild=guild)
-        synced = await bot.tree.sync(guild=guild)
+        player, computer = play_blackjack()
+        player_hand_image_binary = combine_images(player)
+        embed = Embed(title="Player's Cards")
+        embed.set_image(url="attachment://blackjack_combined.png")
+        await ctx.send(file=File(fp=player_hand_image_binary, filename='blackjack_combined.png'), embed=embed)
+        computer_image_binary = combine_images(computer, True)
+        embed = Embed(title="Computer's Cards")
+        embed.set_image(url="attachment://blackjack_combined.png")
+        await ctx.send(file=File(fp=computer_image_binary, filename='blackjack_combined.png'), embed=embed)
+        await ctx.send("Do you want to **Hit** or **Stand**? (Reply with 'h' or 's')")
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['h', 's']
+        try:
+            # Wait for the player's response for 30 seconds
+            message = await bot.wait_for('message', check=check, timeout=30)
+        except asyncio.TimeoutError:
+            await ctx.send("Time is up! Automatically Stood!")
+            return
+
     except Exception as e:
         print(e)
+#Step 3: Handling the startup for the bot
+@bot.event 
+async def on_ready() -> None:
+    print(f'{bot.user} is now running!')
+    try:
+        # Sync commands globally or for a specific guild
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} commands")
+        commands_list = bot.tree.get_commands()
+        print("Commands:", [command.name for command in commands_list])
+    except Exception as e:
+        print(f"Error syncing commands: {e}")
 
-bot.run(TOKEN)
+#Step 4: Handling incoming messages
+@bot.event
+async def on_message(message: Message) -> None:
+    if message.content.startswith(bot.command_prefix):
+        await bot.process_commands(message)
+        return
+    
+#Step 5: Main Entry Point
+def main() -> None:
+    bot.run(token=TOKEN)
+
+if __name__ == '__main__':
+    main()
