@@ -7,7 +7,7 @@ from discord import Intents, Client, Message, app_commands, Interaction, Embed, 
 from discord.ext import commands
 import json
 import sqlite3
-from blackjack import play_blackjack, combine_images
+from blackjack import play_blackjack, combine_images, hit, stand, check_response, send_hand, count_val
 from PIL import Image
 from io import BytesIO
 import requests
@@ -29,27 +29,25 @@ bot: commands.Bot = commands.Bot(command_prefix="|", intents = intents)
 @bot.hybrid_command()
 async def blackjack(ctx: commands.Context):
     try:
-        player, computer = play_blackjack()
-        player_hand_image_binary = combine_images(player)
-        embed = Embed(title="Player's Cards")
-        embed.set_image(url="attachment://blackjack_combined.png")
-        await ctx.send(file=File(fp=player_hand_image_binary, filename='blackjack_combined.png'), embed=embed)
-        computer_image_binary = combine_images(computer, True)
-        embed = Embed(title="Computer's Cards")
-        embed.set_image(url="attachment://blackjack_combined.png")
-        await ctx.send(file=File(fp=computer_image_binary, filename='blackjack_combined.png'), embed=embed)
-        await ctx.send("Do you want to **Hit** or **Stand**? (Reply with 'h' or 's')")
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['h', 's']
-        try:
-            # Wait for the player's response for 30 seconds
-            message = await bot.wait_for('message', check=check, timeout=30)
-        except asyncio.TimeoutError:
-            await ctx.send("Time is up! Automatically Stood!")
-            return
-
+        player, computer, deck_id = play_blackjack()
+        await send_hand(ctx, player, "Player")
+        await send_hand(ctx, computer, "Computer")
+        done = False
+        while not done:
+            await ctx.send("Do you want to **Hit** or **Stand**? (Reply with 'h' or 's')")
+            player, computer, deck_id, done = await check_response(bot, ctx, player, computer, deck_id)
+            await send_hand(ctx, player, "Player")
+            await send_hand(ctx, computer, "Computer")
     except Exception as e:
         print(e)
+    player_count = count_val(player)
+    computer_count = count_val(computer)
+    if(computer_count > 21 or (player_count > computer_count and player_count < 21)):
+        await ctx.send("You Win!!!")
+    elif(player_count > 21 or (player_count < computer_count and computer_count < 21)):
+        await ctx.send("You Lose")
+    else:
+        await ctx.send("Tie!!!")
 #Step 3: Handling the startup for the bot
 @bot.event 
 async def on_ready() -> None:
