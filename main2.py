@@ -37,14 +37,14 @@ async def blackjack(ctx: commands.Context):
             await ctx.send("Do you want to **Hit** or **Stand**? (Reply with 'h' or 's')")
             player, computer, deck_id, done = await check_response(bot, ctx, player, computer, deck_id)
             await send_hand(ctx, player, "Player")
-            await send_hand(ctx, computer, "Computer")
+            await send_hand(ctx, computer, "Computer", done)
     except Exception as e:
         print(e)
     player_count = count_val(player)
     computer_count = count_val(computer)
-    if(computer_count > 21 or (player_count > computer_count and player_count < 21)):
+    if(computer_count > 21 or (player_count > computer_count and player_count <= 21)):
         await ctx.send("You Win!!!")
-    elif(player_count > 21 or (player_count < computer_count and computer_count < 21)):
+    elif(player_count > 21 or (player_count < computer_count and computer_count <= 21)):
         await ctx.send("You Lose")
     else:
         await ctx.send("Tie!!!")

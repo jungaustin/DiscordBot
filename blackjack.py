@@ -29,7 +29,7 @@ def play_blackjack(params = {}):
     player_hand = []
     computer_hand = []
 
-    starting_cards_request = requests.get(draw_a_card_url.format(data['deck_id'], 4))
+    starting_cards_request = requests.get(draw_a_card_url.format(data['deck_id'], 8))
     if starting_cards_request.status_code == 200:
         starting_cards = starting_cards_request.json()
     else:
