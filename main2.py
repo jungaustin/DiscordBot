@@ -28,26 +28,45 @@ bot: commands.Bot = commands.Bot(command_prefix="|", intents = intents)
 
 @bot.hybrid_command()
 async def blackjack(ctx: commands.Context):
+    natural_blackjack = False
+    player = computer = deck_id = None
     try:
         player, computer, deck_id = play_blackjack()
-        await send_hand(ctx, player, "Player")
-        await send_hand(ctx, computer, "Computer")
         done = False
+        msg = ""
+        temp1 = count_val(player)
+        temp2 = count_val(computer)
+        if (temp1 == 21 and temp2 == 21):
+            done = True
+            natural_blackjack = True
+            msg = "Both the Dealer and the Player have natural Blackjacks!"
+        elif(temp1 == 21):
+            done = True
+            natural_blackjack = True
+            msg = "You have a natural Blackjack! You win 2.5x (change later to actual)"
+        elif (temp2 == 21):
+            done = True
+            natural_blackjack = True
+            msg = "Dealer has a natural Blackjack. You Lose."
+        await send_hand(ctx, player, "Player", done)
+        await send_hand(ctx, computer, "Computer", done)
+        if (msg != ""):
+            await ctx.send(msg)
         while not done:
             await ctx.send("Do you want to **Hit** or **Stand**? (Reply with 'h' or 's')")
             player, computer, deck_id, done = await check_response(bot, ctx, player, computer, deck_id)
             await send_hand(ctx, player, "Player")
             await send_hand(ctx, computer, "Computer", done)
+        player_count = count_val(player)
+        computer_count = count_val(computer)
+        if(computer_count > 21 or (player_count > computer_count and player_count <= 21)):
+            await ctx.send("You Win!!!")
+        elif(player_count > 21 or (player_count < computer_count and computer_count <= 21)):
+            await ctx.send("You Lose :3. Try again!")
+        else:
+            await ctx.send("No one wins, and your points will be returned.")
     except Exception as e:
         print(e)
-    player_count = count_val(player)
-    computer_count = count_val(computer)
-    if(computer_count > 21 or (player_count > computer_count and player_count <= 21)):
-        await ctx.send("You Win!!!")
-    elif(player_count > 21 or (player_count < computer_count and computer_count <= 21)):
-        await ctx.send("You Lose")
-    else:
-        await ctx.send("Tie!!!")
 #Step 3: Handling the startup for the bot
 @bot.event 
 async def on_ready() -> None:

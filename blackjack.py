@@ -7,10 +7,10 @@ from discord import File, Embed
 
 
 
-deck_of_cards_url = 'https://www.deckofcardsapi.com/api/deck/new/shuffle/?deck_count=1'
+deck_of_cards_url = 'https://www.deckofcardsapi.com/api/deck/new/shuffle/?deck_count={}'
 draw_a_card_url = 'https://www.deckofcardsapi.com/api/deck/{}/draw/?count={}'
 back_of_card = 'https://www.deckofcardsapi.com/static/img/back.png'
-
+deck_of_cards_nat_bj = "https://www.deckofcardsapi.com/api/deck/new/shuffle/?cards=AS,KS,0S,QS"
 
 royals = {
             'KING': 10,
@@ -20,8 +20,9 @@ royals = {
         }
     
 def play_blackjack(params = {}):
-    params['deck_count'] = 4
-    response1 = requests.get(deck_of_cards_url, params=params)
+    params['deck_count'] = 6
+    response1 = requests.get(deck_of_cards_url.format(params['deck_count']))
+    #response1 = requests.get(deck_of_cards_nat_bj)
     if response1.status_code == 200:
         data = response1.json()
     else:
@@ -29,7 +30,7 @@ def play_blackjack(params = {}):
     player_hand = []
     computer_hand = []
 
-    starting_cards_request = requests.get(draw_a_card_url.format(data['deck_id'], 8))
+    starting_cards_request = requests.get(draw_a_card_url.format(data['deck_id'], 4))
     if starting_cards_request.status_code == 200:
         starting_cards = starting_cards_request.json()
     else:
@@ -98,6 +99,7 @@ async def send_hand(ctx, hand, name, done = False):
         await ctx.send(file=File(fp=image_binary, filename='blackjack_combined.png'), embed=embed)
         embed.set_image(url="attachment://blackjack_combined.png")
 
+#yoinked from chatgpt
 def combine_images(hand, computer = False, done = False):
     if computer and len(hand) == 2 and not done:
         images = []

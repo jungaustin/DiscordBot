@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from discord import Intents, Client, Message, app_commands, Interaction, Embed
 from discord.ext import commands
 from responses import get_response, get_waifu
+from blackjack import play_blackjack, combine_images, hit, stand, check_response, send_hand, count_val
 import json
 import sqlite3
 from datetime import datetime
@@ -35,8 +36,17 @@ async def send_message(message : Message, user_message : str) -> None:
         user_message = user_message[1:]
         
     try:
-        response: str = get_response(user_message, str(message.author))
-        await message.author.send(response) if is_private else await message.channel.send(response)
+        if not is_private:
+            async with message.channel.typing():
+                response: str = get_response(user_message, str(message.author))
+                if (response != "*dnr*"):
+                    await message.channel.send(response)
+                else:
+                    print("dnr")
+        else:
+            response: str = get_response(user_message, str(message.author))
+            if (response != "*dnr*"):
+                await message.author.send(response)
     except Exception as e:
         print(e)
 
@@ -56,6 +66,63 @@ async def getwaifu(ctx: commands.Context):
         # embed.set_footer(text = 'This is a footer')
         # embed.set_author(name = 'Author name')
         await ctx.send(embed=embed)
+    except Exception as e:
+        print(e)
+
+@bot.hybrid_command()
+async def bj(ctx: commands.Context, points:int = 0):
+    currPoints = numPoints(ctx)
+    if(points > currPoints):
+        await ctx.send("You do not have enough points. This game will be played with no stakes.")
+        points = 0
+    if(points < 0):
+        await ctx.send("You can't do negative betting. This game will be played with no stakes.")
+        points = 0
+    natural_blackjack = False
+    player = computer = deck_id = None
+    try:
+        player, computer, deck_id = play_blackjack()
+        done = False
+        msg = ""
+        player_count = count_val(player)
+        computer_count = count_val(computer)
+        if (player_count == 21 and computer_count == 21):
+            done = True
+            natural_blackjack = True
+            msg = "Both the Dealer and the Player have natural Blackjacks!"
+            points = 0
+        elif(player_count == 21):
+            done = True
+            natural_blackjack = True
+            msg = "You have a natural Blackjack! You win 2.5x {}}"
+            points = int(points*2.5)
+        elif (computer_count == 21):
+            done = True
+            natural_blackjack = True
+            msg = "Dealer has a natural Blackjack. You Lose."
+            points *= -1
+        await send_hand(ctx, player, "Player", done)
+        await send_hand(ctx, computer, "Computer", done)
+        if (msg != ""):
+            await ctx.send(msg)
+        while not done:
+            await ctx.send("Do you want to **Hit** or **Stand**? (Reply with 'h' or 's')")
+            player, computer, deck_id, done = await check_response(bot, ctx, player, computer, deck_id)
+            await send_hand(ctx, player, "Player")
+            await send_hand(ctx, computer, "Computer", done)
+        player_count = count_val(player)
+        computer_count = count_val(computer)
+        if(computer_count > 21 or (player_count > computer_count and player_count <= 21)):
+            await ctx.send("You Win!!!")
+        elif(player_count > 21 or (player_count < computer_count and computer_count <= 21)):
+            await ctx.send("You Lose :3. Try again!")
+            if not natural_blackjack:
+                points *= -1
+        else:
+            await ctx.send("No one wins, and your points will be returned.")
+            points = 0
+        add_points(ctx, points)
+        await bot.get_command('points').invoke(ctx)
     except Exception as e:
         print(e)
 
@@ -84,13 +151,33 @@ def initialize(ctx: commands.Context):
                     ''', (ctx.author.name,))
         currUser = cursor.fetchone()
     return curr_server, connection, cursor, currUser
-@bot.hybrid_command()
-async def points(ctx: commands.Context):
+
+def numPoints(ctx: commands.Context):
     curr_server, connection, cursor, currUser = initialize(ctx)
-    await ctx.send(f'You currently have {currUser[2]} points!')
     connection.commit()
     connection.close()
-    
+    return currUser[2]
+
+@bot.hybrid_command()
+async def points(ctx: commands.Context):
+    points = numPoints(ctx)
+    await ctx.send(f'You currently have {points} points!')
+
+def add_points(ctx, num:int):
+    curr_server, connection, cursor, currUser = initialize(ctx)
+    if currUser:
+        user_id, user, points, check_in_date = currUser
+        points += num
+        cursor.execute(f'''
+                        UPDATE {curr_server}
+                        SET
+                            points = ?
+                        WHERE user_id = ?
+                        ''', (points, user_id))
+    connection.commit()
+    connection.close()
+    return points
+
 @bot.hybrid_command()
 async def dailies(ctx: commands.Context):
     curr_server, connection, cursor, currUser = initialize(ctx)
@@ -109,8 +196,6 @@ async def dailies(ctx: commands.Context):
             await ctx.send(f"Hello {user}. You have successfully checked in! You currently have {points} points")
         else:
             await ctx.send(f"Hello {user}. You have already checked in for today.")
-            
-    
     connection.commit()
     connection.close()
 
@@ -119,11 +204,13 @@ async def gpton(ctx: commands.Context):
     global talk_to_ai
     talk_to_ai = True
     await ctx.send("Sylvester Bot is now active!")
+
 @bot.hybrid_command()
 async def gptoff(ctx: commands.Context):
     global talk_to_ai
     talk_to_ai = False
     await ctx.send("Sylvester Bot is now inactive!")
+
 @bot.hybrid_command()
 async def gpttoggle(ctx: commands.Context):
     global talk_to_ai
@@ -132,7 +219,8 @@ async def gpttoggle(ctx: commands.Context):
         await ctx.send("Sylvester Bot is now active!")
     else:
         await ctx.send("Sylvester Bot is now inactive!")
-    
+
+
 # @bot.hybrid_command()
 # async def lastLeagueMatch(ctx: commands.Context, username: str):
 #     data = last_league_match(username)
@@ -150,7 +238,7 @@ async def on_ready() -> None:
     except Exception as e:
         print(f"Error syncing commands: {e}")
 
-#Step 4: Handling incoming messages
+# Step 4: Handling incoming messages
 @bot.event
 async def on_message(message: Message) -> None:
     if message.content.startswith(bot.command_prefix):
@@ -169,7 +257,14 @@ async def on_message(message: Message) -> None:
         channel: str = str(message.channel)
         print(f'[{channel}] {username}: "{user_message}"')
         await send_message(message, user_message)
-    
+
+# #Delete for above later
+# @bot.event
+# async def on_message(message: Message) -> None:
+#     if message.content.startswith(bot.command_prefix):
+#         await bot.process_commands(message)
+#         return
+
 #Step 5: Main Entry Point
 def main() -> None:
     bot.run(token=TOKEN)
